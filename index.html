@@ -56,19 +56,15 @@
         .rec-section h4 { color: #b87c4f; margin-bottom: 10px; font-size: 1.1rem; }
         .rec-section img { width: 100%; border-radius: 20px; margin: 12px 0; border: 1px solid #ede3d6; }
     </style>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 <div class="container" id="app"></div>
 <footer>学术研究 · 上海石库门商业化景区到访意愿实验</footer>
 
 <script>
-    // 初始化 EmailJS（用你的 Public Key）
-    (function() {
-        emailjs.init({
-            publicKey: "7t7ydIHbPZE4Xp-FJ",
-        });
-    })();
+    // 初始化 EmailJS（正确方式）
+    emailjs.init("7t7ydIHbPZE4Xp-FJ");
 
     // 发送邮件通知
     async function sendEmailNotification(data) {
@@ -84,8 +80,10 @@
             
             const response = await emailjs.send('service_kg80bo4', 'template_patnppt', templateParams);
             console.log('邮件发送成功', response);
+            return true;
         } catch (error) {
             console.error('邮件发送失败', error);
+            return false;
         }
     }
 
@@ -315,13 +313,19 @@
                 console.log('完整实验数据', sessionData);
                 
                 // 发送邮件通知
-                await sendEmailNotification({
+                const emailSent = await sendEmailNotification({
                     participantId: sessionData.participantId,
                     group: sessionData.group,
                     typeName: sessionData.typeName,
                     preAvg: sessionData.preAvg,
                     postAvg: sessionData.postAvg
                 });
+                
+                if (emailSent) {
+                    console.log('通知已发送');
+                } else {
+                    console.log('通知发送失败，但数据已保存');
+                }
                 
                 currentPage = 'thanks';
                 render();
