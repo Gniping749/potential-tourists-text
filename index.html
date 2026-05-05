@@ -56,52 +56,36 @@
         .rec-section h4 { color: #b87c4f; margin-bottom: 10px; font-size: 1.1rem; }
         .rec-section img { width: 100%; border-radius: 20px; margin: 12px 0; border: 1px solid #ede3d6; }
     </style>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
 <div class="container" id="app"></div>
 <footer>学术研究 · 上海石库门商业化景区到访意愿实验</footer>
 
 <script>
-    // ========== 飞书配置（已填写） ==========
-    const FEISHU_APP_ID = 'cli_a97275d520f89bc9';
-    const FEISHU_APP_SECRET = 'DZpqv9AzxEhQ0Br6V64lheBslsqZdwXW';
-    const FEISHU_TABLE_ID = 'tblBFQFd4XvjK';
-    const FEISHU_BASE_ID = 'GtFNbsYjs9fAfydWnajcBrNSn9f';  // 从你的表格URL中提取
-
-    // 获取 tenant_access_token
-    async function getFeishuToken() {
-        const url = 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal';
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json; charset=utf-8' },
-            body: JSON.stringify({
-                app_id: FEISHU_APP_ID,
-                app_secret: FEISHU_APP_SECRET
-            })
+    // 初始化 EmailJS（用你的 Public Key）
+    (function() {
+        emailjs.init({
+            publicKey: "q-N04QuPoLtY-6GhOcFIZ",
         });
-        const data = await response.json();
-        if (data.code !== 0) throw new Error(data.msg);
-        return data.tenant_access_token;
-    }
+    })();
 
-    // 写入飞书多维表格
-    async function submitToFeishu(record) {
+    // 发送邮件通知
+    async function sendEmailNotification(data) {
         try {
-            const token = await getFeishuToken();
-            const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_ID}/tables/${FEISHU_TABLE_ID}/records`;
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ fields: record })
-            });
-            const data = await response.json();
-            if (data.code !== 0) console.error('飞书写入失败', data);
-            else console.log('飞书写入成功');
-        } catch (e) {
-            console.error('飞书写入错误', e);
+            const templateParams = {
+                participant_id: data.participantId,
+                group: data.group === 'experiment' ? '实验组' : '对照组',
+                type: data.typeName,
+                pre_avg: data.preAvg.toFixed(2),
+                post_avg: data.postAvg.toFixed(2),
+                submit_time: new Date().toLocaleString('zh-CN')
+            };
+            
+            const response = await emailjs.send('service_kg80bo4', 'template_patnppt', templateParams);
+            console.log('邮件发送成功', response);
+        } catch (error) {
+            console.error('邮件发送失败', error);
         }
     }
 
@@ -110,6 +94,7 @@
         participantId: 'P' + Date.now() + Math.floor(Math.random() * 10000),
         group: null,
         type: null,
+        typeName: null,
         preScores: [],
         postScores: [],
         preAvg: null,
@@ -299,7 +284,8 @@
                 if (typingAnswers.some(v => v === null)) return alert('请完成所有题目');
                 sessionData.group = assignGroup();
                 sessionData.type = computeTypeByAvg();
-                console.log('分组:', sessionData.group, '类型:', getTypeName(sessionData.type));
+                sessionData.typeName = getTypeName(sessionData.type);
+                console.log('分组:', sessionData.group, '类型:', sessionData.typeName);
                 currentPage = 'content';
                 render();
             });
@@ -327,17 +313,16 @@
                 sessionData.postAvg = postAnswers.reduce((a,b)=>a+b,0)/5;
                 sessionData.postScores = [...postAnswers];
                 console.log('完整实验数据', sessionData);
-
-                // 写入飞书
-                await submitToFeishu({
-                    '被试ID': sessionData.participantId,
-                    '组别': sessionData.group === 'experiment' ? '实验组' : '对照组',
-                    '判型结果': getTypeName(sessionData.type),
-                    '前测成绩': sessionData.preAvg,
-                    '后测成绩': sessionData.postAvg,
-                    '提交时间': new Date().toISOString()
+                
+                // 发送邮件通知
+                await sendEmailNotification({
+                    participantId: sessionData.participantId,
+                    group: sessionData.group,
+                    typeName: sessionData.typeName,
+                    preAvg: sessionData.preAvg,
+                    postAvg: sessionData.postAvg
                 });
-
+                
                 currentPage = 'thanks';
                 render();
             });
