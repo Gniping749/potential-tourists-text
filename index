@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>石库门实验 · 精准推送研究</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f0e8 0%, #e8dfd3 100%);
+            min-height: 100vh;
+            padding: 24px 20px 60px;
+            color: #2c2418;
+        }
+        .container { max-width: 700px; margin: 0 auto; }
+        .card {
+            background: rgba(255,255,255,0.96);
+            border-radius: 32px;
+            padding: 32px 28px;
+            margin-bottom: 20px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+            border: 1px solid rgba(210,180,140,0.3);
+            word-break: break-word;
+        }
+        h1 { font-size: 1.9rem; font-weight: 600; color: #6b4c2c; margin-bottom: 12px; }
+        h2 { font-size: 1.4rem; color: #8b623f; margin-bottom: 20px; }
+        h3 { font-size: 1.2rem; color: #8b623f; margin: 20px 0 12px; }
+        .subhead { color: #7a5a3a; border-left: 3px solid #c9aa7b; padding-left: 14px; margin-bottom: 24px; }
+        .question-item { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid #ede3d6; }
+        .question-text { font-weight: 600; margin-bottom: 14px; font-size: 1rem; line-height: 1.4; }
+        .options { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
+        .opt-btn {
+            flex: 1; min-width: 60px; background: #f7f2ea; border: 1px solid #ddd0be;
+            border-radius: 40px; padding: 10px 0; text-align: center; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.2s; color: #4a3520;
+        }
+        .opt-btn.selected { background: #b87c4f; border-color: #b87c4f; color: white; }
+        .opt-label { font-size: 0.65rem; display: block; color: #9b7a5a; }
+        .opt-btn.selected .opt-label { color: rgba(255,255,240,0.9); }
+        button {
+            background: #6b4c2c; color: white; border: none; padding: 14px 24px;
+            border-radius: 60px; font-size: 1rem; font-weight: 600; cursor: pointer;
+            width: 100%; margin-top: 20px;
+        }
+        button:hover { background: #8b623f; }
+        .content-block { background: #fef9f2; padding: 20px; border-radius: 24px; margin: 20px 0; border-left: 4px solid #c9aa7b; }
+        footer { text-align: center; font-size: 0.7rem; color: #8f765a; margin-top: 30px; }
+        hr { margin: 16px 0; border: none; border-top: 1px solid #ede3d6; }
+        .img-grid { display: flex; gap: 12px; margin: 20px 0; flex-wrap: wrap; }
+        .img-grid img { width: calc(50% - 6px); border-radius: 20px; object-fit: cover; max-height: 160px; background: #f0ebe2; }
+        .mode-card { margin-bottom: 28px; border-left: 3px solid #c9aa7b; padding-left: 20px; }
+        .mode-card strong { font-size: 1.05rem; }
+        .mode-examples { font-size: 0.85rem; color: #8b6946; margin: 6px 0; }
+        .rec-section { margin: 24px 0 20px; }
+        .rec-section h4 { color: #b87c4f; margin-bottom: 10px; font-size: 1.1rem; }
+        .rec-section img { width: 100%; border-radius: 20px; margin: 12px 0; border: 1px solid #ede3d6; }
+    </style>
+</head>
+<body>
+<div class="container" id="app"></div>
+<footer>学术研究 · 上海石库门商业化景区到访意愿实验</footer>
+
+<script>
+    // ========== 飞书配置（已填写） ==========
+    const FEISHU_APP_ID = 'cli_a97275d520f89bc9';
+    const FEISHU_APP_SECRET = 'DZpqv9AzxEhQ0Br6V64lheBslsqZdwXW';
+    const FEISHU_TABLE_ID = 'tblBFQFd4XvjK';
+    const FEISHU_BASE_ID = 'GtFNbsYjs9fAfydWnajcBrNSn9f';  // 从你的表格URL中提取
+
+    // 获取 tenant_access_token
+    async function getFeishuToken() {
+        const url = 'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+            body: JSON.stringify({
+                app_id: FEISHU_APP_ID,
+                app_secret: FEISHU_APP_SECRET
+            })
+        });
+        const data = await response.json();
+        if (data.code !== 0) throw new Error(data.msg);
+        return data.tenant_access_token;
+    }
+
+    // 写入飞书多维表格
+    async function submitToFeishu(record) {
+        try {
+            const token = await getFeishuToken();
+            const url = `https://open.feishu.cn/open-apis/bitable/v1/apps/${FEISHU_BASE_ID}/tables/${FEISHU_TABLE_ID}/records`;
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fields: record })
+            });
+            const data = await response.json();
+            if (data.code !== 0) console.error('飞书写入失败', data);
+            else console.log('飞书写入成功');
+        } catch (e) {
+            console.error('飞书写入错误', e);
+        }
+    }
+
+    // ========== 实验数据存储 ==========
+    let sessionData = {
+        participantId: 'P' + Date.now() + Math.floor(Math.random() * 10000),
+        group: null,
+        type: null,
+        preScores: [],
+        postScores: [],
+        preAvg: null,
+        postAvg: null
+    };
+
+    let currentPage = 'consent';
+
+    let preAnswers = [null, null, null, null];
+    let typingAnswers = [null, null, null, null, null, null, null, null];
+    let postAnswers = [null, null, null, null, null];
+
+    // ========== 判型规则（平均分版） ==========
+    function computeTypeByAvg() {
+        let cultureAvg = (typingAnswers[0] + typingAnswers[1]) / 2;
+        let heatAvg = (typingAnswers[2] + typingAnswers[3]) / 2;
+        let wordmouthAvg = (typingAnswers[4] + typingAnswers[5]) / 2;
+        let emotionAvg = (typingAnswers[6] + typingAnswers[7]) / 2;
+
+        let isDeepCulture = cultureAvg >= 3.5 && heatAvg >= 3.5 && wordmouthAvg >= 3.5 && emotionAvg >= 3.5;
+        if (isDeepCulture) return 'deep_culture';
+
+        let isWordEmotion = wordmouthAvg >= 3.5 && emotionAvg >= 3.5 && cultureAvg < 3.5 && heatAvg < 3.5;
+        if (isWordEmotion) return 'wordmouth_emotion';
+
+        let isLow = heatAvg <= 2.5 && wordmouthAvg <= 2.5 && emotionAvg <= 2.5;
+        if (isLow) return 'low_awareness';
+
+        return 'demand_fit';
+    }
+
+    function getTypeName(type) {
+        const map = {
+            deep_culture: '深度文化认同型',
+            wordmouth_emotion: '口碑情感驱动型',
+            demand_fit: '生活场景消费型',
+            low_awareness: '低感知低意愿型'
+        };
+        return map[type];
+    }
+
+    // ========== 推送内容 ==========
+    function getPushContent(group, type) {
+        if (group === 'control') {
+            return {
+                hasContent: true,
+                title: '景区介绍',
+                text: '<p>该街区位于上海市中心，由若干条里弄组成，内有餐饮、零售等商业设施，值得游览。</p>'
+            };
+        }
+        if (type === 'wordmouth_emotion') {
+            return {
+                hasContent: true,
+                title: '🔥 网红打卡地推荐',
+                text: `
+                    <p>该街区近期在小红书、大众点评、抖音等平台热度持续攀升，累计获得超4.8分好评，多家媒体将其评为"上海必打卡地标之一"。</p>
+                    <div class="rec-section"><h4>📱 社交平台热度</h4><p>不少游客自发分享体验笔记与打卡视频，称"来了就不想走""随手一拍都出片"。</p><img src="https://miaobi-lite.bj.bcebos.com/miaobi/5mao/b%275LiK5rW35peF5ri45b%2BF5Y675YWN6LS55pmv54K5XzE3MzE2MDE5NTMuNjQ2MDIzOA%3D%3D%27/0.png" loading="lazy" onerror="this.style.display='none'"></div>
+                    <div class="rec-section"><h4>🎁 打卡赢好礼活动</h4><p>街区同步推出"打卡赢好礼"活动，发布话题#爱上石库门#的图文或视频，即可参与抽奖。</p><img src="https://imagepphcloud.thepaper.cn/pph/image/175/792/196.jpg" loading="lazy" onerror="this.style.display='none'"></div>
+                `
+            };
+        }
+        if (type === 'deep_culture') {
+            return {
+                hasContent: true,
+                title: '🎨 石库门记忆——百年上海生活展',
+                text: `
+                    <p>该街区近期正在举办"石库门记忆——百年上海生活展"。</p>
+                    <div class="rec-section"><h4>🏺 老物件与历史记忆</h4><p>展览分为三大板块，展出老照片、历史物件、建筑模型等。</p><img src="https://p6.itc.cn/q_70/images03/20211202/bf6af2d28e7346378c0180d479f29064.jpeg" loading="lazy" onerror="this.style.display='none'"></div>
+                    <div class="rec-section"><h4>👘 沉浸式互动体验</h4><p>可亲手触摸复刻砖雕、试穿老式旗袍、聆听老上海弄堂叫卖声。</p><img src="https://mvideopic.bdstatic.com/mvideo/08bbb5df67061254dc18c8d578be11b3?for=bg" loading="lazy" onerror="this.style.display='none'"></div>
+                `
+            };
+        }
+        return { hasContent: false, title: '', text: '' };
+    }
+
+    // 实验组 70% / 对照组 30%
+    function assignGroup() {
+        return Math.random() < 0.7 ? 'experiment' : 'control';
+    }
+
+    // 改造模式介绍（图片）
+    function getModes() {
+        return [
+            { name: '🏛️ 整体置换·高端开发型', examples: '新天地 · 张园', desc: '完整保留建筑外观，内部功能置换为高端商业。',
+              images: ['https://img2.baidu.com/it/u=3080579136,56867293&fm=253&fmt=auto&app=138&f=JPEG?w=750&h=500','https://img1.baidu.com/it/u=781039542,293136520&fm=253&fmt=auto&app=120&f=JPEG?w=750&h=500'] },
+            { name: '🎨 自发聚集·有机更新型', examples: '田子坊', desc: '保留弄堂格局与商居共生生态，烟火气浓。',
+              images: ['https://img2.baidu.com/it/u=30382054,2847129121&fm=253&fmt=auto&app=138&f=JPEG?w=574&h=356','https://img1.baidu.com/it/u=1051581571,1040188895&fm=253&fmt=auto&app=138&f=JPEG?w=500&h=333'] },
+            { name: '🌿 局部修缮·社区共生型', examples: '今潮8弄 · 鸿寿坊', desc: '修旧如旧，植入艺术与社区商业，氛围松弛。',
+              images: ['https://img0.baidu.com/it/u=1920124073,2019954107&fm=253&fmt=auto&app=120&f=JPEG?w=775&h=500','https://img2.baidu.com/it/u=1486317557,2162555080&fm=253&fmt=auto&app=138&f=JPEG?w=784&h=500'] }
+        ];
+    }
+
+    // ========== 页面渲染与交互 ==========
+    function render() {
+        const app = document.getElementById('app');
+        let html = '';
+
+        if (currentPage === 'consent') {
+            html = `<div class="card"><h1>📋 实验知情同意书</h1><div class="subhead">感谢您参与本次研究</div><p style="margin:20px 0; line-height:1.6;">本研究旨在了解不同人群对上海石库门商业化景区的认知与兴趣。<br><br>您将完成一份简短的类型测试、两份兴趣问卷，并阅读一段关于石库门的介绍材料。<br><br>所有信息仅用于学术研究，严格保密。<br><br>您有权随时退出实验。</p><hr><button id="consentBtn">✅ 同意并继续</button></div>`;
+        }
+        else if (currentPage === 'intro') {
+            let modes = getModes();
+            let modesHtml = '';
+            modes.forEach(m => {
+                modesHtml += `<div class="mode-card"><strong>${m.name}</strong><div class="mode-examples">📌 ${m.examples}</div><p>${m.desc}</p><div class="img-grid">${m.images.map(url => `<img src="${url}" loading="lazy" onerror="this.style.display='none'">`).join('')}</div></div>`;
+            });
+            html = `<div class="card"><h1>🏮 石库门·上海里弄记忆</h1><div class="subhead">守“沪”旧里，焕新游踪</div><p>石库门是上海最具代表性的民居建筑，承载着中西合璧的建筑美学与海派文化记忆。</p><div style="margin:20px 0;"><h3>三种石库门改造模式</h3>${modesHtml}</div><button id="nextBtn">📖 下一页</button></div>`;
+        }
+        else if (currentPage === 'pretest') {
+            let qs = ['我对石库门商业化景区感兴趣','如果有机会去上海旅游，我会优先考虑将石库门纳入行程','我愿意花费1-2小时专门游览石库门街区','我会向朋友推荐石库门景区'];
+            let qHtml = '';
+            for (let i=0;i<qs.length;i++) {
+                qHtml += `<div class="question-item"><div class="question-text">${i+1}. ${qs[i]}</div><div class="options" id="preOpts_${i}">${[1,2,3,4,5].map(v=>`<div class="opt-btn ${preAnswers[i]===v?'selected':''}" data-val="${v}">${v}<span class="opt-label">${v===1?'非常不同意':v===2?'不太同意':v===3?'一般':v===4?'比较同意':'非常同意'}</span></div>`).join('')}</div></div>`;
+            }
+            html = `<div class="card"><h2>📝 前测问卷</h2>${qHtml}<button id="submitPretestBtn">提交 →</button></div>`;
+        }
+        else if (currentPage === 'typing') {
+            let qs = ['石库门的文化内涵带来的较强吸引力，会提升我的到访意愿。','石库门是上海独特的城市文化符号，游览它使我更好地理解这座城市。','我在社交平台看到的石库门打卡场景照片/视频很吸引我。','看到石库门在社交平台的高打卡量，会让我觉得它值得一去。','他人传播石库门体验的正面评价，会提升我前往的意愿。','如果石库门街区在网站上评分较高，我会更放心地将其列入行程。','石库门商业化保留的老上海元素，让我对这座城市的历史产生了好奇。','游览石库门能满足我体验当地文化的期待，感觉更贴近真实的上海。'];
+            let qHtml = '';
+            for (let i=0;i<qs.length;i++) {
+                qHtml += `<div class="question-item"><div class="question-text">${i+1}. ${qs[i]}</div><div class="options" id="typeOpts_${i}">${[1,2,3,4,5].map(v=>`<div class="opt-btn ${typingAnswers[i]===v?'selected':''}" data-val="${v}">${v}<span class="opt-label">${v===1?'非常不同意':v===2?'不太同意':v===3?'一般':v===4?'比较同意':'非常同意'}</span></div>`).join('')}</div></div>`;
+            }
+            html = `<div class="card"><h2>🔍 类型测试</h2>${qHtml}<button id="submitTypingBtn">提交 →</button></div>`;
+        }
+        else if (currentPage === 'content') {
+            let c = getPushContent(sessionData.group, sessionData.type);
+            if (!c.hasContent) { currentPage = 'posttest'; render(); return; }
+            html = `<div class="card"><h2>📖 ${c.title}</h2><div class="content-block">${c.text}</div><button id="continueBtn">继续 →</button></div>`;
+        }
+        else if (currentPage === 'posttest') {
+            let qs = ['我对该石库门商业化景区感兴趣','我会优先考虑将该景区纳入上海行程','我愿意专门游览该景区','我会向朋友推荐该景区','与阅读材料前相比，兴趣更浓厚了'];
+            let qHtml = '';
+            for (let i=0;i<qs.length;i++) {
+                qHtml += `<div class="question-item"><div class="question-text">${i+1}. ${qs[i]}</div><div class="options" id="postOpts_${i}">${[1,2,3,4,5].map(v=>`<div class="opt-btn ${postAnswers[i]===v?'selected':''}" data-val="${v}">${v}<span class="opt-label">${v===1?'非常不同意':v===2?'不太同意':v===3?'一般':v===4?'比较同意':'非常同意'}</span></div>`).join('')}</div></div>`;
+            }
+            html = `<div class="card"><h2>📝 后测问卷</h2>${qHtml}<button id="submitPosttestBtn">提交 →</button></div>`;
+        }
+        else if (currentPage === 'thanks') {
+            html = `<div class="card"><h1>🎉 实验完成</h1><div class="subhead">感谢您的参与！</div><p>您的回答已成功提交。</p><p style="color:#8b623f;">祝您生活愉快！</p></div>`;
+        }
+
+        app.innerHTML = html;
+        bindEvents();
+    }
+
+    function bindEvents() {
+        if (currentPage === 'consent') {
+            document.getElementById('consentBtn')?.addEventListener('click', () => { currentPage = 'intro'; render(); });
+        } else if (currentPage === 'intro') {
+            document.getElementById('nextBtn')?.addEventListener('click', () => { currentPage = 'pretest'; render(); });
+        } else if (currentPage === 'pretest') {
+            for (let i = 0; i < 4; i++) {
+                let box = document.getElementById(`preOpts_${i}`);
+                if (box) {
+                    box.querySelectorAll('.opt-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            let val = parseInt(btn.dataset.val);
+                            preAnswers[i] = val;
+                            box.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+                            btn.classList.add('selected');
+                        });
+                    });
+                }
+            }
+            document.getElementById('submitPretestBtn')?.addEventListener('click', async () => {
+                if (preAnswers.some(v => v === null)) return alert('请完成所有题目');
+                sessionData.preAvg = preAnswers.reduce((a,b)=>a+b,0)/4;
+                sessionData.preScores = [...preAnswers];
+                currentPage = 'typing';
+                render();
+            });
+        } else if (currentPage === 'typing') {
+            for (let i = 0; i < 8; i++) {
+                let box = document.getElementById(`typeOpts_${i}`);
+                if (box) {
+                    box.querySelectorAll('.opt-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            let val = parseInt(btn.dataset.val);
+                            typingAnswers[i] = val;
+                            box.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+                            btn.classList.add('selected');
+                        });
+                    });
+                }
+            }
+            document.getElementById('submitTypingBtn')?.addEventListener('click', () => {
+                if (typingAnswers.some(v => v === null)) return alert('请完成所有题目');
+                sessionData.group = assignGroup();
+                sessionData.type = computeTypeByAvg();
+                console.log('分组:', sessionData.group, '类型:', getTypeName(sessionData.type));
+                currentPage = 'content';
+                render();
+            });
+        } else if (currentPage === 'content') {
+            document.getElementById('continueBtn')?.addEventListener('click', () => {
+                currentPage = 'posttest';
+                render();
+            });
+        } else if (currentPage === 'posttest') {
+            for (let i = 0; i < 5; i++) {
+                let box = document.getElementById(`postOpts_${i}`);
+                if (box) {
+                    box.querySelectorAll('.opt-btn').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            let val = parseInt(btn.dataset.val);
+                            postAnswers[i] = val;
+                            box.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+                            btn.classList.add('selected');
+                        });
+                    });
+                }
+            }
+            document.getElementById('submitPosttestBtn')?.addEventListener('click', async () => {
+                if (postAnswers.some(v => v === null)) return alert('请完成所有题目');
+                sessionData.postAvg = postAnswers.reduce((a,b)=>a+b,0)/5;
+                sessionData.postScores = [...postAnswers];
+                console.log('完整实验数据', sessionData);
+
+                // 写入飞书
+                await submitToFeishu({
+                    '被试ID': sessionData.participantId,
+                    '组别': sessionData.group === 'experiment' ? '实验组' : '对照组',
+                    '判型结果': getTypeName(sessionData.type),
+                    '前测成绩': sessionData.preAvg,
+                    '后测成绩': sessionData.postAvg,
+                    '提交时间': new Date().toISOString()
+                });
+
+                currentPage = 'thanks';
+                render();
+            });
+        }
+    }
+
+    render();
+</script>
+</body>
+</html>
